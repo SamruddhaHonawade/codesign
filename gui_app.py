@@ -1,5 +1,3 @@
-# gui_app.py
-
 import os
 import json
 import zipfile
@@ -9,7 +7,7 @@ from tkinter import filedialog, messagebox
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 
-# Import from the new, separated cryptographic modules
+# Import from separated cryptographic modules
 from hashing import compute_sha3_256
 from signing import generate_keypair, sign_digest, verify_signature
 from certificate import create_self_signed_cert
@@ -22,65 +20,105 @@ from cryptography.hazmat.backends import default_backend
 
 class CodeSignerApp(tb.Window):
     def __init__(self):
-        super().__init__(themename="cyborg")
-        self.title("🔐Code Signing Tool")
-        self.geometry("800x500")
-        self.resizable(False, False)
+        super().__init__(themename="darkly")
+        self.title("🔐 Code Signing Tool")
+        self.state("zoomed")  # Full screen
 
         self.file_path = None
         self.zip_path = None
+        self.private_key = None
+        self.public_key = None
+        self.loaded_key_algo = None
 
         self._create_widgets()
 
     def _create_widgets(self):
         # Notebook (tabs)
         notebook = tb.Notebook(self, bootstyle="primary")
-        notebook.pack(fill=BOTH, expand=True, padx=15, pady=15)
+        notebook.pack(fill=BOTH, expand=True, padx=20, pady=20)
 
-        # Sign Tab
+        # Tabs
         sign_tab = tb.Frame(notebook)
-        notebook.add(sign_tab, text="✍️ Sign File")
-        self._create_sign_tab(sign_tab)
-
-        # Verify Tab
         verify_tab = tb.Frame(notebook)
+        key_tab = tb.Frame(notebook)
+
+        notebook.add(sign_tab, text="✍️ Sign File")
         notebook.add(verify_tab, text="🕵️ Verify Package")
+        notebook.add(key_tab, text="🔑 Key Management")
+
+        self._create_sign_tab(sign_tab)
         self._create_verify_tab(verify_tab)
+        self._create_key_tab(key_tab)
 
         # Log Box
-        self.log_box = tk.Text(self, height=8, bg="#1e1e1e", fg="white", insertbackground="white")
-        self.log_box.pack(fill=X, padx=15, pady=(0, 10))
+        self.log_box = tk.Text(
+            self,
+            height=10,
+            bg="#1e1e1e",
+            fg="white",
+            insertbackground="white",
+            font=("Consolas", 10)
+        )
+        self.log_box.pack(fill=X, padx=20, pady=(0, 15))
 
+    # ---------------- SIGN TAB ----------------
     def _create_sign_tab(self, parent):
-        self.file_label = tb.Label(parent, text="No file selected", bootstyle="secondary")
+        frame = tb.Labelframe(parent, text="File Signing", padding=20)
+        frame.pack(fill=BOTH, expand=True, padx=20, pady=20)
+
+        self.file_label = tb.Label(frame, text="No file selected", bootstyle="secondary")
         self.file_label.pack(pady=10)
-        tb.Button(parent, text="Choose File", bootstyle="primary", command=self.choose_file).pack()
+        tb.Button(frame, text="Choose File", bootstyle="primary-outline", command=self.choose_file).pack()
 
-        tb.Label(parent, text="Select Algorithm").pack(pady=(15, 5))
+        tb.Label(frame, text="Select Algorithm").pack(pady=(20, 5))
         self.algo_var = tk.StringVar(value="RSA")
-        tb.Combobox(parent, textvariable=self.algo_var, values=["RSA", "ECDSA", "Ed25519"], state="readonly").pack()
+        tb.Combobox(frame, textvariable=self.algo_var, values=["RSA", "ECDSA", "Ed25519"], state="readonly").pack()
 
-        tb.Label(parent, text="Publisher Name").pack(pady=(15, 5))
-        self.publisher_entry = tb.Entry(parent, width=40)
+        tb.Label(frame, text="Publisher Name").pack(pady=(20, 5))
+        self.publisher_entry = tb.Entry(frame, width=50)
         self.publisher_entry.insert(0, "My Company Inc.")
         self.publisher_entry.pack()
 
-        tb.Button(parent, text="Sign & Create ZIP", bootstyle="success", command=self.sign_file).pack(pady=20)
-        self.sign_status = tb.Label(parent, text="", bootstyle="info")
+        tb.Button(frame, text="Sign & Create ZIP", bootstyle="success", command=self.sign_file, width=25).pack(pady=25)
+        self.sign_status = tb.Label(frame, text="", bootstyle="info")
         self.sign_status.pack()
 
+    # ---------------- VERIFY TAB ----------------
     def _create_verify_tab(self, parent):
-        self.zip_label = tb.Label(parent, text="No package selected", bootstyle="secondary")
+        frame = tb.Labelframe(parent, text="Package Verification", padding=20)
+        frame.pack(fill=BOTH, expand=True, padx=20, pady=20)
+
+        self.zip_label = tb.Label(frame, text="No package selected", bootstyle="secondary")
         self.zip_label.pack(pady=10)
-        tb.Button(parent, text="Choose ZIP", bootstyle="primary", command=self.choose_zip).pack()
-        tb.Button(parent, text="Verify", bootstyle="success", command=self.verify_zip).pack(pady=15)
-        self.verify_status = tb.Label(parent, text="", bootstyle="warning")
+        tb.Button(frame, text="Choose ZIP", bootstyle="primary-outline", command=self.choose_zip).pack()
+
+        tb.Button(frame, text="Verify Package", bootstyle="success", command=self.verify_zip, width=25).pack(pady=20)
+        self.verify_status = tb.Label(frame, text="", bootstyle="warning")
         self.verify_status.pack()
 
+    # ---------------- KEY MANAGEMENT TAB ----------------
+    def _create_key_tab(self, parent):
+        frame = tb.Labelframe(parent, text="Manage Keys", padding=20)
+        frame.pack(fill=BOTH, expand=True, padx=20, pady=20)
+
+        tb.Label(frame, text="Generate or Load Keys").pack(pady=(0, 15))
+
+        self.key_algo_var = tk.StringVar(value="RSA")
+        tb.Combobox(frame, textvariable=self.key_algo_var, values=["RSA", "ECDSA", "Ed25519"], state="readonly").pack(pady=5)
+
+        tb.Button(frame, text="Generate New Keypair", bootstyle="info", command=self.generate_new_key).pack(pady=10)
+        tb.Button(frame, text="Load Private Key", bootstyle="primary", command=self.load_private_key).pack(pady=10)
+        tb.Button(frame, text="Save Private Key", bootstyle="secondary", command=self.save_private_key).pack(pady=10)
+
+        self.key_status = tb.Label(frame, text="No key loaded", bootstyle="secondary")
+        self.key_status.pack(pady=15)
+
+    # ---------------- LOGGING ----------------
     def log(self, msg):
         self.log_box.insert("end", f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {msg}\n")
         self.log_box.see("end")
 
+    # ---------------- FILE SELECTION ----------------
     def choose_file(self):
         path = filedialog.askopenfilename(title="Select file to sign")
         if path:
@@ -95,6 +133,7 @@ class CodeSignerApp(tb.Window):
             self.zip_label.config(text=os.path.basename(path))
             self.log(f"Package selected: {path}")
 
+    # ---------------- SIGNING ----------------
     def sign_file(self):
         if not self.file_path:
             messagebox.showerror("Error", "Select a file first.")
@@ -112,14 +151,21 @@ class CodeSignerApp(tb.Window):
             digest = compute_sha3_256(file_bytes)
             algo = self.algo_var.get()
 
-            self.log(f"Generating {algo} keypair...")
-            private_key = generate_keypair(algo)
+            if not self.private_key:
+                self.log(f"Generating {algo} keypair...")
+                self.private_key = generate_keypair(algo)
+                self.loaded_key_algo = algo
+
+            # Ensure loaded key is used if available
+            if self.loaded_key_algo and self.loaded_key_algo != algo:
+                self.log(f"Warning: Loaded key is {self.loaded_key_algo}, overriding selection.")
+                algo = self.loaded_key_algo
 
             self.log("Signing digest...")
-            sig = sign_digest(private_key, algo, digest)
+            sig = sign_digest(self.private_key, algo, digest)
 
             self.log("Creating self-signed certificate...")
-            cert = create_self_signed_cert(private_key, publisher)
+            cert = create_self_signed_cert(self.private_key, publisher)
             cert_pem = cert.public_bytes(serialization.Encoding.PEM)
 
             metadata = {"algorithm": algo, "hash": digest.hex(), "signed_by": publisher}
@@ -143,6 +189,7 @@ class CodeSignerApp(tb.Window):
             self.log(f"ERROR: {e}")
             messagebox.showerror("Signing Error", str(e))
 
+    # ---------------- VERIFY ----------------
     def verify_zip(self):
         if not self.zip_path:
             messagebox.showerror("Error", "Select a package first.")
@@ -184,3 +231,49 @@ class CodeSignerApp(tb.Window):
         except Exception as e:
             self.log(f"ERROR: {e}")
             messagebox.showerror("Verification Error", str(e))
+
+    # ---------------- KEY MANAGEMENT ----------------
+    def generate_new_key(self):
+        algo = self.key_algo_var.get()
+        self.private_key = generate_keypair(algo)
+        self.loaded_key_algo = algo
+        self.key_status.config(text=f"✅ New {algo} key generated", bootstyle="success")
+        self.log(f"New {algo} keypair generated.")
+
+    def load_private_key(self):
+        path = filedialog.askopenfilename(title="Select Private Key", filetypes=[("PEM files", "*.pem")])
+        if path:
+            try:
+                with open(path, "rb") as f:
+                    self.private_key = serialization.load_pem_private_key(f.read(), password=None)
+                self.key_status.config(text=f"🔑 Loaded private key from {os.path.basename(path)}", bootstyle="info")
+                self.log(f"Private key loaded from {path}")
+                # Guess algorithm from key type
+                if hasattr(self.private_key, "curve"):
+                    self.loaded_key_algo = "ECDSA"
+                elif hasattr(self.private_key, "public_key") and "Ed25519" in str(type(self.private_key)):
+                    self.loaded_key_algo = "Ed25519"
+                else:
+                    self.loaded_key_algo = "RSA"
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to load key: {e}")
+
+    def save_private_key(self):
+        if not self.private_key:
+            messagebox.showerror("Error", "No key to save.")
+            return
+        path = filedialog.asksaveasfilename(defaultextension=".pem", filetypes=[("PEM files", "*.pem")])
+        if path:
+            try:
+                with open(path, "wb") as f:
+                    f.write(self.private_key.private_bytes(
+                        encoding=serialization.Encoding.PEM,
+                        format=serialization.PrivateFormat.TraditionalOpenSSL,
+                        encryption_algorithm=serialization.NoEncryption()
+                    ))
+                self.key_status.config(text=f"💾 Key saved to {os.path.basename(path)}", bootstyle="secondary")
+                self.log(f"Private key saved to {path}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save key: {e}")
+
+
