@@ -8,3 +8,9 @@ def compute_sha3_256(data: bytes) -> bytes:
     digest = hashes.Hash(hashes.SHA3_256(), backend=default_backend())
     digest.update(data)
     return digest.finalize()
+
+def compute_sha3_512(data: bytes) -> bytes:
+
+    digest = hashes.Hash(hashes.SHA3_512(), backend=default_backend())
+    digest.update(data)
+    return digest.finalize()
