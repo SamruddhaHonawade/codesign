@@ -1,19 +1,20 @@
+# certificate.py
 import datetime
 from cryptography import x509
 from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
 from cryptography.hazmat.primitives import hashes
 
-def create_self_signed_cert(private_key, subject_name: str, valid_days=365, is_ca=False):
-    """Creates a detailed self-signed X.509 certificate and prints details."""
+def create_self_signed_cert(private_key, country: str, state: str, locality: str, organization: str, org_unit: str, common_name: str, email: str, valid_days=365, is_ca=False):
+    """Creates a detailed self-signed X.509 certificate."""
 
     subject = issuer = x509.Name([
-        x509.NameAttribute(NameOID.COUNTRY_NAME, "IN"),
-        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Karnataka"),
-        x509.NameAttribute(NameOID.LOCALITY_NAME, "Bengaluru"),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "MyCompany Pvt Ltd"),
-        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, "Software Division"),
-        x509.NameAttribute(NameOID.COMMON_NAME, subject_name),
-        x509.NameAttribute(NameOID.EMAIL_ADDRESS, "support@mycompany.com"),
+        x509.NameAttribute(NameOID.COUNTRY_NAME, country),
+        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state),
+        x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, organization),
+        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, org_unit),
+        x509.NameAttribute(NameOID.COMMON_NAME, common_name),
+        x509.NameAttribute(NameOID.EMAIL_ADDRESS, email),
     ])
 
     now = datetime.datetime.utcnow()
@@ -57,19 +58,5 @@ def create_self_signed_cert(private_key, subject_name: str, valid_days=365, is_c
     )
 
     cert = cert_builder.sign(private_key, hashes.SHA256())
-
-    # === Print details ===
-    print("\n=== Certificate Details ===")
-    print("Subject:", cert.subject.rfc4514_string())
-    print("Issuer:", cert.issuer.rfc4514_string())
-    print("Serial Number:", cert.serial_number)
-    print("Validity:")
-    print("   Not Before:", cert.not_valid_before)
-    print("   Not After :", cert.not_valid_after)
-    print("Signature Algorithm:", cert.signature_hash_algorithm.name)
-
-    print("\nExtensions:")
-    for ext in cert.extensions:
-        print(f" - {ext.oid._name} (critical={ext.critical}): {ext.value}")
 
     return cert
